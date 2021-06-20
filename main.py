@@ -188,7 +188,7 @@ def simulate_game():
 
 
 if __name__ == '__main__':
-    games = 1000
+    games = 100
     scores = np.zeros([games,2])
 
     for i in range(games):
@@ -197,6 +197,7 @@ if __name__ == '__main__':
 
     team_one_wins = len(np.where(scores[:,0] > scores[:,1])[0])
     print(f'Team one probability: {team_one_wins/games}')
+    print(f'Mean scores: {np.mean(scores)}')
 
 
     
