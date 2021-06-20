@@ -6,11 +6,11 @@ import random
 
 import baseball.baseball as bb
 
-#verbose=False
-verbose=True
+verbose=False
+#verbose=True
 
-num_innings=1
-#num_innings=9
+#num_innings=2
+num_innings=9
 
 
 def simulate_game():
@@ -25,98 +25,143 @@ def simulate_game():
             else:
                 if verbose:
                     print(f'Bottom of inning {inning}')
+
+            # We need to distinguish where runners are before (init) and after the pitch
+            init_on_first = False
+            init_on_second = False
+            init_on_third = False
+
             while outs < 3:
-                on_first = False
-                on_second = False
-                on_third = False
                 strikes = 0
                 balls = 0
                 batting = True
                 if verbose:
                     print(f'Batter up, outs {outs}')
                 while batting:
-                    possible_outcomes = bb.list_outcomes(on_first, on_second, on_third)
-                    outcome = random.choices(possible_outcomes, weight=None, k=1)[0]
+
+                    on_first = init_on_first
+                    on_second = init_on_second
+                    on_third = init_on_third
+
+                    possible_outcomes = bb.list_outcomes(init_on_first, init_on_second, init_on_third)
+                    outcome = random.choices(possible_outcomes, weights=None, k=1)[0]
+                    if isinstance(outcome, tuple):
+                        batter_outcome = outcome[0]
+                    else:
+                        batter_outcome = outcome
+
                     if verbose:
                         print(f'pitch outcome {outcome}')
+
+                    # TODO: 4 balls might goof my Cartesian product scheme a little.
+                    # Not obvious where to process the result of 4 balls.
+
+                    # Process third base runner
+                    if init_on_third:
+                        # TODO: Unclear how to index, it's either 1, 2, or 3. Must exist a cleaner way.
+                        if init_on_first and init_on_second:
+                            third_outcome = outcome[3]
+                        elif (init_on_first and not init_on_second) or (not init_on_first and init_on_second):
+                            third_outcome = outcome[2]
+                        else:
+                            third_outcome = outcome[1]
+
+                        if third_outcome == 'out':
+                            outs += 1
+                            on_third = False
+                        elif third_outcome == 'home':
+                            score[team] += 1
+                            on_third = False
+
+                    # Process second base runner
+                    if init_on_second:
+                        # TODO TJR: Need better way to figure out if it's index 1 or 2
+                        if init_on_first:
+                            second_outcome = outcome[2]
+                        else:
+                            second_outcome = outcome[1]
+
+                        if second_outcome == 'out':
+                            outs += 1
+                            on_second = False
+                        elif second_outcome == 'third':
+                            on_second = False
+                            on_third = True
+                        elif second_outcome == 'home':
+                            on_second = False
+                            score[team] += 1
+
+                    # Process first base runner
+                    if init_on_first:
+                        first_outcome = outcome[1]
+                        if first_outcome == 'out':
+                            outs += 1
+                            on_first = False
+                        elif first_outcome == 'second':
+                            on_first = False
+                            on_second = True
+                        elif first_outcome == 'third':
+                            on_first = False
+                            on_third = True
     
                     # Process batter's outcomes
-                    if outcome[0] == 'strike':
+                    if batter_outcome == 'strike':
                         strikes += 1 
 
-#                    elif outcome == Outcomes.FOUL:
-#                        # TODO: There is a chance of stealing
-#                        if (strikes < 2):
-#                            strikes += 1
-#
-#                    elif outcome == Outcomes.BALL:
-#                        # TODO: There is a chance of stealing
-#                        balls += 1
+                    elif batter_outcome == 'foul':
+                        if (strikes < 2):
+                            strikes += 1
 
-                    #elif outcome == Outcomes.OUT:
-                    elif outcome[0] == 'out':
+                    elif batter_outcome == 'ball':
+                        balls += 1
+                        # TODO: Any other work that should go here?
+                    
+                    elif batter_outcome == 'out':
                         batting = False
                         outs += 1
 
-                    elif outcome == Outcomes.FIRST:
+                    elif batter_outcome == 'first':
                         batting = False
                         on_first = True
-#                        if not True in bases: # No players on base, put batter on first.
-#                            bases[0] = True
-#
-#                        # Runners are on what bases?
-#                        runner_bases = []
-#                        for i, base in enumerate(bases):
-#                            if base:
-#                                runner_bases.append(i + 1)
-#
-#                        # Consider leading running
-#                        possible_bases = range(runner_bases[-1], 4)
-#                        out = [-1] + list(possible_bases) # -1 here will imply an out.
-#                        choice = random.choices(out, weights=None, k=1)
-#                        if choice == -1:
-#                            outs += 1
-#                            if outs == 3:
-#                                break
 
-                    elif outcome == Outcomes.SECOND:
-                        if not True in bases: # No players on base, put batter on second
-                            bases[1] = True
-
-                        # TODO: Need state of players on bases
+                    elif batter_outcome == 'second':
                         batting = False
+                        on_second = True
 
-                    elif outcome == Outcomes.THIRD:
-                        if not True in bases: # No players on base, put batter on third
-                            bases[1] = True
-                        # TODO: Need state of players on bases
+                    elif batter_outcome == 'third':
                         batting = False
+                        on_third = True
 
-                    elif outcome == Outcomes.HOMER:
+                    elif batter_outcome == 'home':
                         batting = False
                         score[team] += 1
 
-                        # Any players on base score
-                        # TODO: there is a possibility of a home run where people get out
-                        # and there are pickles etc.
-                        for base in bases:
-                            if base:
-                                score[team] += 1
-
                     else:
-                        raise f'Invalid outcome: {outcome}.'
+                        raise f'Invalid outcome: {batter_outcome}.'
     
                     if strikes == 3:
                         batting = False
                         outs += 1
-                        if outs == 3:
-                            break
-    
-                    if balls == 4:
-                        # TODO: Put player on first
-                        batting = False
-                        pass
-    
+
+                    init_on_first = on_first
+                    init_on_second = on_second
+                    init_on_third = on_third
+
+                    # Process 4 balls
+                    # TODO: Make sure this is where the 4 balls logic should go.
+#                    if balls == 4:
+#                        pass
+#                        # TODO: I need to double check this logic
+#                        if on_first and on_second and on_third:
+#                            score[team] += 1
+#                        elif on_first and on_second:
+#                            on_third = True
+#                        elif on_first and not on_second:
+#                            on_second = True
+#                        on_first = True
+#                        batting = False
+
+
             # If was bottom of inning (team 1) then increment inning
             if team == 1:
                 inning += 1
@@ -143,7 +188,7 @@ def simulate_game():
 
 
 if __name__ == '__main__':
-    games = 1 
+    games = 1000
     scores = np.zeros([games,2])
 
     for i in range(games):
