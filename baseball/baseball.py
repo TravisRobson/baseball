@@ -86,22 +86,35 @@ def game_over(score, inning):
 
     return False
 
+
+class StateSampler:
+    """Provide a random baseball state given current state."""
+    def __init__(self, filename):
+        self.__matrix = np.load('data/transitionMatrixBatByBat.npy')
+        assert(self.__matrix.shape[0] == len(possible_states))
+        assert(self.__matrix.shape[0] == self.__matrix.shape[1])
+        # Fix the seed so we can get repeatable results if we want.
+        # https://stackoverflow.com/a/63980788
+        seed = 123456789
+        self.__scipy_randomGen = ss.multinomial
+        self.__scipy_randomGen.random_state = np.random.Generator(np.random.PCG64(seed))
+
+    def sample(self, state):
+        index = get_index(state)
+        trans_probs = self.__matrix[index, :]
+        # @todo TJR: Put this check in the constructor
+        assert np.isclose(np.sum(trans_probs), 1.0, 1.0e-7) # @todo TJR: 1.0e-7 close enough for floating points?
+        sample = self.__scipy_randomGen.rvs(n=1, p=trans_probs) #ss.multinomial.rvs(n=1, p=trans_probs)
+        new_index = np.where(sample == 1)[0][0]
+        return possible_states[new_index]
+
 def play_ball():
     score = Score()
     outs = 0
     batting_team = 'away'
     inning = 1.0
 
-    matrix = np.load('data/transitionMatrixBatByBat.npy')
-    assert(matrix.shape[0] == len(possible_states))
-    assert(matrix.shape[0] == matrix.shape[1])
-    #print(matrix[0,:])
-
-    # Fix the seed so we can get repeatable results if we want.
-    # https://stackoverflow.com/a/63980788
-    seed = 123456789
-    scipy_randomGen = ss.multinomial
-    scipy_randomGen.random_state = np.random.Generator(np.random.PCG64(seed))
+    sampler = StateSampler('data/transitionMatrixBatByBat.npy')
 
     # Execute every inning
     while True:
@@ -109,18 +122,11 @@ def play_ball():
         state = (OutStates.ZERO, RunnerStates.NONE)
 
         at_bats = 0
-        while num_outs(state) < 3: # half-inning
-            # Sample a state transition 
-            index = get_index(state)
-            trans_probs = matrix[index, :]
-            assert np.isclose(np.sum(trans_probs), 1.0, 1.0e-7) # @todo TJR: 1.0e-7 close enough for floating points?
-            sample = scipy_randomGen.rvs(n=1, p=trans_probs) #ss.multinomial.rvs(n=1, p=trans_probs)
-            new_index = np.where(sample == 1)[0][0]
-            new_state = possible_states[new_index]
+        while num_outs(state) < 3:
+            new_state = sampler.sample(state)
 
-            # Calculate the number of runs scored
+            # Update the score.
             runs = runs_scored(state, new_state)
-            #print(f'runs {runs}, outs {bb.num_outs(new_state)}')
             if batting_team == 'away':
                 score.away += runs
             else:

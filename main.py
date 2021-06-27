@@ -25,7 +25,7 @@ if __name__ == '__main__':
         scores[i] = score.home, score.away
 
     team_one_wins = len(np.where(scores[:,0] > scores[:,1])[0])
-    print(f'Team one probability: {team_one_wins/games}')
+    print(f'Team one probability: {team_one_wins/num_games}')
     print(f'Mean scores: {np.mean(scores)}')
     print(f'median scores: {np.median(scores)}')
     print(f'std  scores: {np.std(scores)}')
