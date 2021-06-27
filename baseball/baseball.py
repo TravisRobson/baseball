@@ -10,7 +10,7 @@ class OutStates(Enum):
 class RunnerStates(Enum):
     """All possible ways runners can be on bases."""
     # The length of these arrays are used to calculate number of runs given a transition.
-    NONE = [0]# 0
+    NONE = []# 0
     B1 = [1] #1
     B2 = [2] #2
     B3 = [3] #3
@@ -42,8 +42,8 @@ def runs_scored(a, b):
         if i == b:
             return b.value
 
-    delta_runners = len(b[1].value) - len(a[1].value)
-    delta_outs = b[0].value - b[0].value
+    delta_runners = len(a[1].value) - len(b[1].value) 
+    delta_outs = num_outs(b) - num_outs(a)
     return delta_runners - delta_outs + 1
 
 
