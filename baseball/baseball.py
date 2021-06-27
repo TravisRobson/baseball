@@ -1,78 +1,57 @@
 
+from enum import Enum
 import itertools
 
-first_outcomes = ['first', 'second', 'third', 'home', 'out']
-batter_outcomes = first_outcomes + ['strike', 'foul', 'ball']
-second_outcomes = first_outcomes[1:]
-third_outcomes = first_outcomes[2:]
+class OutStates(Enum):
+    ZERO = 0
+    ONE = 1
+    TWO = 2
+
+class RunnerStates(Enum):
+    """All possible ways runners can be on bases."""
+    # The length of these arrays are used to calculate number of runs given a transition.
+    NONE = [0]# 0
+    B1 = [1] #1
+    B2 = [2] #2
+    B3 = [3] #3
+    B12 = [1, 2] #4
+    B13 = [1, 3] #5
+    B23 = [2, 3]# 6
+    B123 = [1, 2, 3] #7
+
+class ThirdOutStates(Enum):
+    """Values (rhs) is equal to number of runs scored. Relied on elsewhere."""
+    RUNS_0 = 0
+    RUNS_1 = 1
+    RUNS_2 = 2
+    RUNS_3 = 3
+
+# The order here is important to match Blake's matrix.
+possible_states = list(itertools.product(list(OutStates), list(RunnerStates))) + list(ThirdOutStates)
+
+def get_index(state):
+    """Which index into possible_states does 'state' correspond to?"""
+    for i, s in enumerate(possible_states):
+        if state == s:
+            return i
+    raise LookupError(f'State {state} isn\'t a possible baseball state.')
+
+def runs_scored(a, b):
+    """Given transition from state a to b how many runs were scored?"""
+    for i in list(ThirdOutStates):
+        if i == b:
+            return b.value
+
+    delta_runners = len(b[1].value) - len(a[1].value)
+    delta_outs = b[0].value - b[0].value
+    return delta_runners - delta_outs + 1
 
 
-def invalid(a, b):
-    """Make sure b, runner leading a, is not on same base as a, or a base before a."""
-    if a == 'first':
-        if b in ['first']:
-            return True
-
-    if a == 'second':
-        if b in ['first', 'second']:
-            return True
-
-    # TODO: Is it somehow weirdly possible for a player to go backwards?
-    if a == 'third':
-        if b in ['first', 'second', 'third']:
-            return True
-
-def list_outcomes(on_first, on_second, on_third):
-    """List all possible outcomes for a single pitch."""
-    # No players on base
-    if not on_first and not on_second and not on_third:
-        return batter_outcomes
-
-    # One player on base
-    if on_first and not on_second and not on_third:
-        outcomes = list(itertools.product(batter_outcomes, first_outcomes))
-        for bat, first in list(outcomes): # list() creates a copy so we can modify original
-            if invalid(bat, first):
-                outcomes.remove((bat, first))
-
-    if not on_first and on_second and not on_third:
-        outcomes = list(itertools.product(batter_outcomes, second_outcomes))
-        for bat, second in list(outcomes):
-            if invalid(bat, second):
-                outcomes.remove((bat, second))
-
-    if not on_first and not on_second and on_third:
-        outcomes = list(itertools.product(batter_outcomes, third_outcomes))
-        for bat, third in list(outcomes):
-            if invalid(bat, third):
-                outcomes.remove((bat, third))
-
-    # Two players on base
-    if on_first and on_second and not on_third:
-        outcomes = list(itertools.product(batter_outcomes, first_outcomes, second_outcomes))
-        for bat, first, second in list(outcomes):
-            if invalid(bat, first) or invalid(bat, second) or invalid(first, second):
-                outcomes.remove((bat, first, second))
-
-    if on_first and not on_second and on_third:
-        outcomes = list(itertools.product(batter_outcomes, first_outcomes, third_outcomes))
-        for bat, first, third in list(outcomes):
-            if invalid(bat, first) or invalid(bat, third) or invalid(first, third):
-                outcomes.remove((bat, first, third))
-
-    if not on_first and on_second and on_third:
-        outcomes = list(itertools.product(batter_outcomes, second_outcomes, third_outcomes))
-        for bat, second, third in list(outcomes):
-            if invalid(bat, second) or invalid(bat, third) or invalid(second, third):
-                outcomes.remove((bat, second, third))
-
-    # Three players on base
-    if on_first and on_second and on_third:
-        outcomes = list(itertools.product(batter_outcomes, first_outcomes, second_outcomes, third_outcomes))
-        for bat, first, second, third in list(outcomes):
-            invalid_bat = invalid(bat, first) or invalid(bat, second) or invalid(bat, third)
-            if invalid_bat or invalid(first, second) or invalid(first, third) or invalid(second, third):
-                outcomes.remove((bat, first, second, third))
-
-    return outcomes
-
+def num_outs(state):
+    """Calculate the number of outs for a given state."""
+    for i in list(ThirdOutStates):
+        if state == i:
+            return 3
+    for i in list(OutStates):
+        if state[0] == i:
+            return state[0].value
