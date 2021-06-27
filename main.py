@@ -1,199 +1,108 @@
 #!/usr/bin/env python3
 
-from enum import Enum
+
+import copy
+from dataclasses import dataclass
 import numpy as np
 import random
+import scipy.stats as ss
 
 import baseball.baseball as bb
 
-verbose=False
-#verbose=True
 
-#num_innings=2
-num_innings=9
+@dataclass
+class Score:
+    """Simply to give names to the score."""
+    home: int = 0
+    away: int = 0
 
 
-def simulate_game():
-    score = [0, 0]
-    team = 0 # 0 or 1, depending on which team is up to bat.
-    inning = 1
+def game_over(score, inning):
+
+    #max_innings = 9.0 # This value used for easy debugging (i.e. to create short games)
+    max_innings = 1.0
+    if inning >= max_innings - 0.5:
+        if score.home > score.away:
+            return True
+    elif inning >= max_innings:
+        if score.home != score.away:
+            return True
+    return False
+
+
+def play_ball():
+    score = Score()
+    outs = 0
+    batting_team = 'away'
+    inning = 1.0
+
+    matrix = np.load('data/transitionMatrix.npy')
+    assert(matrix.shape[0] == len(bb.possible_states))
+    assert(matrix.shape[0] == matrix.shape[1])
+    print(bb.possible_states)
+
+    # Execute every inning
     while True:
-            outs = 0
-            if team == 0:
-                if verbose:
-                    print(f'Top of inning {inning}')
+        print(f'Inning {inning}, score: home ({score.home}), away({score.away})')
+        state = (bb.OutStates.ZERO, bb.RunnerStates.NONE)
+        
+
+        count = 0
+        while bb.num_outs(state) < 3: # half-inning
+            # Sample a state transition 
+            # @todo TJR: 1.0e-7 close enough for floating points?
+            index = bb.get_index(state)
+            trans_probs = matrix[index, :]
+            assert np.isclose(np.sum(trans_probs), 1.0, 1.0e-7)
+            sample = ss.multinomial.rvs(n=1, p=trans_probs)
+            print(trans_probs)
+            new_index = np.where(sample == 1)[0][0]
+            new_state = bb.possible_states[new_index]
+            #print(new_state)
+
+            # Calculate the number of runs scored
+            runs = bb.runs_scored(state, new_state)
+            print(f'runs {runs}')
+            if batting_team == 'away':
+                score.away += runs
             else:
-                if verbose:
-                    print(f'Bottom of inning {inning}')
+                score.home += runs
 
-            # We need to distinguish where runners are before (init) and after the pitch
-            init_on_first = False
-            init_on_second = False
-            init_on_third = False
-
-            while outs < 3:
-                strikes = 0
-                balls = 0
-                batting = True
-                if verbose:
-                    print(f'Batter up, outs {outs}')
-                while batting:
-
-                    on_first = init_on_first
-                    on_second = init_on_second
-                    on_third = init_on_third
-
-                    possible_outcomes = bb.list_outcomes(init_on_first, init_on_second, init_on_third)
-                    outcome = random.choices(possible_outcomes, weights=None, k=1)[0]
-                    if isinstance(outcome, tuple):
-                        batter_outcome = outcome[0]
-                    else:
-                        batter_outcome = outcome
-
-                    if verbose:
-                        print(f'pitch outcome {outcome}')
-
-                    # TODO: 4 balls might goof my Cartesian product scheme a little.
-                    # Not obvious where to process the result of 4 balls.
-
-                    # Process third base runner
-                    if init_on_third:
-                        # TODO: Unclear how to index, it's either 1, 2, or 3. Must exist a cleaner way.
-                        if init_on_first and init_on_second:
-                            third_outcome = outcome[3]
-                        elif (init_on_first and not init_on_second) or (not init_on_first and init_on_second):
-                            third_outcome = outcome[2]
-                        else:
-                            third_outcome = outcome[1]
-
-                        if third_outcome == 'out':
-                            outs += 1
-                            on_third = False
-                        elif third_outcome == 'home':
-                            score[team] += 1
-                            on_third = False
-
-                    # Process second base runner
-                    if init_on_second:
-                        # TODO TJR: Need better way to figure out if it's index 1 or 2
-                        if init_on_first:
-                            second_outcome = outcome[2]
-                        else:
-                            second_outcome = outcome[1]
-
-                        if second_outcome == 'out':
-                            outs += 1
-                            on_second = False
-                        elif second_outcome == 'third':
-                            on_second = False
-                            on_third = True
-                        elif second_outcome == 'home':
-                            on_second = False
-                            score[team] += 1
-
-                    # Process first base runner
-                    if init_on_first:
-                        first_outcome = outcome[1]
-                        if first_outcome == 'out':
-                            outs += 1
-                            on_first = False
-                        elif first_outcome == 'second':
-                            on_first = False
-                            on_second = True
-                        elif first_outcome == 'third':
-                            on_first = False
-                            on_third = True
-    
-                    # Process batter's outcomes
-                    if batter_outcome == 'strike':
-                        strikes += 1 
-
-                    elif batter_outcome == 'foul':
-                        if (strikes < 2):
-                            strikes += 1
-
-                    elif batter_outcome == 'ball':
-                        balls += 1
-                        # TODO: Any other work that should go here?
-                    
-                    elif batter_outcome == 'out':
-                        batting = False
-                        outs += 1
-
-                    elif batter_outcome == 'first':
-                        batting = False
-                        on_first = True
-
-                    elif batter_outcome == 'second':
-                        batting = False
-                        on_second = True
-
-                    elif batter_outcome == 'third':
-                        batting = False
-                        on_third = True
-
-                    elif batter_outcome == 'home':
-                        batting = False
-                        score[team] += 1
-
-                    else:
-                        raise f'Invalid outcome: {batter_outcome}.'
-    
-                    if strikes == 3:
-                        batting = False
-                        outs += 1
-
-                    init_on_first = on_first
-                    init_on_second = on_second
-                    init_on_third = on_third
-
-                    # Process 4 balls
-                    # TODO: Make sure this is where the 4 balls logic should go.
-#                    if balls == 4:
-#                        pass
-#                        # TODO: I need to double check this logic
-#                        if on_first and on_second and on_third:
-#                            score[team] += 1
-#                        elif on_first and on_second:
-#                            on_third = True
-#                        elif on_first and not on_second:
-#                            on_second = True
-#                        on_first = True
-#                        batting = False
-
-
-            # If was bottom of inning (team 1) then increment inning
-            if team == 1:
-                inning += 1
-    
-            # Take care of which team is up next
-            if team == 0:
-                team = 1
-            else:
-                team = 0
-    
-            if verbose:
-                print(f'Score: {score[0]} to {score[1]}')
-                print('----------------------------------\n')
+            # @todo TJR: Deep copy is needed right?
+            state = copy.deepcopy(new_state)
+            print(f'Num outs {bb.num_outs(state)}')
+            print(f'state {state}')
             
-            # Game over at 9th inning (potentially the top of 9th if home winning) or
-            # when there isn't a tie past the 9th.
-            # TODO: Fix logic for when the home team is winning (i.e. don't play second half of inning).
-            if inning >= num_innings and team == 1 and score[0] != score[1]:
-                if verbose:
-                    print('Game over!')
-                break
+            # Prevent infinite loops from invalid transition matrices.
+            count += 1
+            if count > 100:
+                raise('Infinite loop for batters.')
+
+        # Check if the game is over
+        if game_over(score, inning):
+            break
+        elif inning > 20:
+            raise Exception('Infinite loop for innings.')            
+
+        #break
+        inning += 0.5
+
+        # change team up to bat
+        if batting_team == 'away':
+            batting_team == 'home'
+        else:
+            batting_team == 'away'
 
     return score
 
 
 if __name__ == '__main__':
-    games = 100
-    scores = np.zeros([games,2])
-
+    """Run many games and calculate some stats."""
+    games = 1
+    scores = np.zeros([games, 2])
     for i in range(games):
-        score = simulate_game()
-        scores[i] = score[0], score[1]
+        score = play_ball()
+        scores[i] = score.home, score.away
 
     team_one_wins = len(np.where(scores[:,0] > scores[:,1])[0])
     print(f'Team one probability: {team_one_wins/games}')
