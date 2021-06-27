@@ -75,13 +75,13 @@ def play_ball():
             # Prevent infinite loops from (likely) invalid transition matrices.
             at_bats += 1
             if at_bats > 100:
-                raise Exception('Infinite loop for batters.')
+                raise Exception('Potential infinite loop for batters.')
 
         # Check if the game is over
         if game_over(score, inning):
             break
         elif inning > 20:
-            raise Exception('Infinite loop for innings.')            
+            raise Exception('Potential infinite loop for innings.')            
 
         inning += 0.5
 
@@ -105,8 +105,10 @@ if __name__ == '__main__':
     team_one_wins = len(np.where(scores[:,0] > scores[:,1])[0])
     print(f'Team one probability: {team_one_wins/games}')
     print(f'Mean scores: {np.mean(scores)}')
+    print(f'median scores: {np.median(scores)}')
     print(f'std  scores: {np.std(scores)}')
-
+    
+    np.save('output/scores.npy', scores)
 
     
 
